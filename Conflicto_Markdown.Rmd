@@ -1,0 +1,142 @@
+---
+title: "Armed Conflict in Colombia"
+author: "Manuela Szinovatz"
+date: "17/10/2018"
+output: html_document
+---
+
+For the analysis we are using data from the Colombian governmental organisation Unidad Victimas, that is in charge of registering all the victims of Columbia's armed conflict. They can be downloaded here: https://cifras.unidadvictimas.gov.co/
+Up until October 2018 a total number of 8.760.290 victims have been registered.
+
+```{r loading, warning=F, message=F, echo=F}
+
+# load packages
+library(readr)
+library(tidyr)
+library(dplyr)
+library(readxl)
+library(stringr)
+library(DT)
+
+Siniestros <- read_excel("data/raw_data_conflicto/Reporte_Siniestros.xlsx") %>%
+  select(TIPO= `TIPO DE VICTIMA`,
+         ANIO=`ANIO OCURRENCIA`,
+         MUNICIPIO=`MUNICIPIO OCURRENCIA`,
+         TOTAL)
+
+```
+
+```{r Data, warning=F, message=F, echo=F}
+
+Siniestros_grouped <- Siniestros %>% 
+  filter(ANIO != 9999 & ANIO >= 1998) %>% 
+  group_by(MUNICIPIO, ANIO) %>% 
+  summarise(Siniestros=sum(TOTAL)) %>% 
+  rename(Municipality = MUNICIPIO,
+         Year = ANIO,
+         Incidents = Siniestros) %>% 
+  arrange(desc(Incidents))
+
+datatable(Siniestros_grouped)
+
+```
+
+## Violent Incidents
+
+The following graphic shows the overall number of incidents in Colombia's worst affected municipalities Incidents in this case reach from homicides, threats, torture, terroristic attacks and other kinds of violence. The grand majority of the displayed incidents hoewever are forced displacements.
+
+```{r visualise, echo=FALSE}
+
+# Bringing in the packages
+library(ggplot2)
+library(ggthemes)
+library(forcats)
+
+#Preparing data for visualisation
+Siniestros_vis <- Siniestros %>%
+  filter(MUNICIPIO!="Sin Información" & ANIO != 9999 & ANIO >= 1998) %>% 
+  group_by(MUNICIPIO) %>% 
+  mutate(Siniestros_Total=sum(TOTAL)) %>% 
+  mutate(SINIESTROS=round(Siniestros_Total/1000,1)) %>% 
+  filter(Siniestros_Total>=50811)
+
+#Plot it out
+ggplot(Siniestros_vis,
+       aes(x=SINIESTROS,
+           y=fct_reorder(MUNICIPIO, SINIESTROS, desc=TRUE))) +
+  geom_segment(
+    aes(x = 0,
+        xend = SINIESTROS,
+        yend = fct_reorder(MUNICIPIO, SINIESTROS, desc=TRUE)),
+    color = "gray50") +
+  geom_point(color="red")+
+  scale_x_continuous(limits=c(0,350))+
+  theme_fivethirtyeight()+
+  labs(x="Siniestros in Thousands",
+       title="Municipalities with most Incidents",
+       subtitle="Total Number of Violent Incidents from 1985-2018",
+       caption="Source: https://cifras.unidadvictimas.gov.co/")+
+  geom_text(aes(label=SINIESTROS), hjust=-.5) +
+  theme(panel.border = element_blank(), 
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(), 
+        axis.line = element_blank(),
+        axis.text.x = element_blank())
+
+```
+
+Buenaventura has more than 40 percent more violent incidents than in the second-most affected municipality Medellín, although Medellin is 6.5 times bigger than Buenaventura in terms of population.
+
+The following graph shows how the violent incidents in Buenaventura and Medellín have development over the last 23 years of conflict.
+
+```{r Timeline, echo=FALSE, warning=F, message=F}
+
+Siniestros_1 <- Siniestros %>%
+  group_by(ANIO, MUNICIPIO) %>% 
+  filter(MUNICIPIO=="MEDELLIN" | MUNICIPIO=="BUENAVENTURA") %>% 
+  filter(ANIO>=1985) %>% 
+  summarise(Siniestros=sum(TOTAL))
+
+Siniestros_Col <- Siniestros %>% 
+  group_by(ANIO) %>% 
+  summarise(COLOMBIA_Total=sum(TOTAL))
+
+Siniestros_Col <- Siniestros_Col %>% 
+  mutate(COLOMBIA=round(COLOMBIA_Total/(nrow(Siniestros_Col)))) %>% 
+  select(-COLOMBIA_Total)
+
+Siniestros_2 <- Siniestros_1 %>%
+  group_by(ANIO, MUNICIPIO) %>% 
+  summarise(Siniestros_Total=sum(Siniestros)) %>% 
+  spread(MUNICIPIO, Siniestros_Total)
+
+joined_Sin <- left_join(Siniestros_2, Siniestros_Col, by="ANIO")
+
+Timeline_Sin <- joined_Sin %>% 
+  gather(MUNICIPIO, Siniestros, 2:4)
+
+Timeline_Sin_copy <- Timeline_Sin %>% 
+  filter(MUNICIPIO=="COLOMBIA") %>% 
+  select(-MUNICIPIO)
+
+Timeline_Sin <- Timeline_Sin %>% 
+  filter(MUNICIPIO!="COLOMBIA")
+
+ggplot(data=Timeline_Sin,
+       aes(x=ANIO,
+           y=Siniestros,
+           color=MUNICIPIO)) +
+  geom_line(data=Timeline_Sin_copy, color="grey")+
+  geom_line()+
+  scale_x_continuous(breaks=seq(1985,2015,5), limits=c(1984,2018))+
+  facet_wrap(~MUNICIPIO)+
+  labs(x="Year",
+       title="Incidents in Buenaventura and Medellín",
+       subtitle="Total Number of Incidents from 1985-2018 Compared to Colombian Average",
+       caption="Source: https://cifras.unidadvictimas.gov.co/")+
+  theme_fivethirtyeight()+
+  theme(legend.position = "none")+
+  theme(axis.title.y = element_blank())+
+  theme(axis.title.x = element_blank())
+
+```
