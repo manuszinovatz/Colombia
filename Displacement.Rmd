@@ -1,0 +1,294 @@
+---
+title: "Forced Displacement in Colombia"
+author: "Manuela Szinovatz"
+output: html_document
+---
+
+
+The following analysis is based on data from the Colombian governmental organisation Unidad Victimas, that is in charge of registering the victims of Columbia's Armed Conflict. The data can be downloaded here: https://cifras.unidadvictimas.gov.co/
+
+Check out the interactive map showing the total number of displaced people in each Colombian department.
+
+
+```{r Population, echo=F, warning=F, message=F, include=FALSE}
+
+# load packages
+library(readr)
+library(tidyr)
+library(dplyr)
+library(readxl)
+library(stringr)
+library(DT)
+library(sf)
+library(tigris)
+library(leaflet)
+library(stringr)
+library(scales)
+library(ggplot2)
+library(ggthemes)
+library(forcats)
+
+#Loading the Population data
+Presion <- read_excel("/Users/Manu/Desktop/Kolumbien_Projekt/Medellin_R/data/raw_data_conflicto/Reporte_Intensidad_Presion.xlsx")
+
+Poblacion <- Presion %>% 
+  filter(`TIPO DE VICTIMA`=="Víctimas de conflicto armado") %>%
+  filter(ANIO>=1998) %>% 
+  group_by(DEPARTAMENTO, ANIO) %>% 
+  summarise(Poblacion=sum(POBLACION)) %>% 
+  arrange(desc(Poblacion))
+
+Poblacion_av_Dep <- Poblacion %>%
+  group_by(DEPARTAMENTO) %>% 
+  summarise(Poblacion_average=round(mean(Poblacion)))%>% 
+  arrange(desc(Poblacion_average))
+
+Poblacion_av_Dep$DEPARTAMENTO <- str_to_upper(Poblacion_av_Dep$DEPARTAMENTO) %>%
+  str_replace("Í", "I") %>% 
+  str_replace("Á", "A") %>% 
+  str_replace("É", "E") %>% 
+  str_replace("Ó", "O")
+
+Poblacion_av_Dep <- subset(Poblacion_av_Dep, !is.na(Poblacion_average))
+
+```
+
+
+```{r Displaced, echo=F, warning=F, message=F, include=FALSE}
+
+# Loading and preparing Displacement data
+Desplazados_2 <- read_excel("/Users/Manu/Desktop/Kolumbien_Projekt/Medellin_R/data/raw_data_conflicto/Reporte_Desplazados_Anio.xlsx") %>% 
+  select(TIPO=`TIPO DE VICTIMA`,
+         ANIO,
+         DANE=`CODIGO DANE`,
+         DEPARTAMENTO, MUNICIPIO,
+         EXPULSADOS=`PERSONAS EXPULSADOS`,
+         RECIBIDOS=`PERSONAS RECIBIDOS`) %>% 
+  filter(ANIO>=1998) %>% 
+  mutate(DIFFERENCE=RECIBIDOS-EXPULSADOS)
+
+Desplazados_QGIS_Dep <- Desplazados_2 %>% 
+  group_by(DEPARTAMENTO) %>% 
+  summarise(Expelled=sum(EXPULSADOS)) %>% 
+  mutate(Expelled_100=round(Expelled/100)) %>% 
+  mutate(Expelled_1000=round(Expelled/1000)) %>% 
+  mutate(Expelled_10000=round(Expelled/10000))
+
+Expelled_Dep_per_capita <- left_join(Desplazados_QGIS_Dep, Poblacion_av_Dep) %>%
+  mutate(Per_Capita=round(Expelled/Poblacion_average*100,2))
+
+Expelled_Dep_per_capita <- subset(Expelled_Dep_per_capita, !is.na(Per_Capita))
+
+```
+
+```{r Shapefile, echo=F, warning=F, message=F, include=FALSE}
+
+#Loading Shapefile and preparing it
+Interactive_Col <- st_read("/Users/Manu/Desktop/Kolumbien_Projekt/Medellin_R/Shapefiles/States_provinces/ne_10m_admin_1_states_provinces.shp")
+
+Colombia_Int <- Interactive_Col %>% 
+  filter(iso_a2=="CO")
+
+Colombia_Int <- Colombia_Int %>%
+  filter(name!="<NA>") %>% 
+  rename(DEPARTAMENTO=name)
+
+Colombia_Int$DEPARTAMENTO <- str_to_upper(Colombia_Int$DEPARTAMENTO) %>% 
+  str_replace("Í", "I") %>% 
+  str_replace("Á", "A") %>% 
+  str_replace("É", "E") %>% 
+  str_replace("Ó", "O") %>% 
+  str_replace("Ú", "U")
+
+#Joining Shapefile and Data:
+Expelled_Dep_per_capita$DEPARTAMENTO <- str_replace(Expelled_Dep_per_capita$DEPARTAMENTO, "BOGOTA, D.C.", "BOGOTA")
+
+Interactive_merged <- geo_join(Colombia_Int, Expelled_Dep_per_capita, "DEPARTAMENTO", "DEPARTAMENTO")
+
+Interactive_merged <- subset(Interactive_merged, !is.na(Expelled))
+
+Interactive_merged <- Interactive_merged %>% 
+  mutate(Expelled_pretty=format(Interactive_merged$Expelled, big.mark = ","))
+
+Interactive_merged$DEPARTAMENTO <- str_to_lower(Interactive_merged$DEPARTAMENTO)
+
+Interactive_merged$DEPARTAMENTO <- str_to_title(Interactive_merged$DEPARTAMENTO)
+
+```
+
+```{r Interactive_Map, echo=F, warning=F, message=F}
+
+#Creating Color Palette for Expelled:
+pal <- colorNumeric("Greens", domain=Interactive_merged$Expelled)
+
+#Setting up pop-up text:
+popup <- paste0(Interactive_merged$DEPARTAMENTO, ": ",
+                as.character(Interactive_merged$Expelled_pretty))
+
+leaflet() %>% 
+  addProviderTiles("CartoDB.Positron") %>% 
+  setView(-74.012792, 4.702589, zoom=6) %>%
+  addPolygons(data=Interactive_merged,
+              fillColor =~pal(Interactive_merged$Expelled),
+              fillOpacity = 0.7,
+              weight = 0.2,
+              smoothFactor = 0.2,
+              highlight = highlightOptions(
+                weight=5,
+                color = "#666",
+                fillOpacity = 0.7,
+                bringToFront = TRUE),
+              label = popup,
+              labelOptions = labelOptions(
+                style = list("font-weight" = "normal", padding ="3px 8px"),
+                textsize = "15px",
+                direction = "auto")) %>%
+  addLegend(pal=pal,
+            values = Interactive_merged$Expelled,
+            position = "bottomright",
+            title = "No. Displaced People")
+
+```
+
+
+
+Check out the following table that lists the total number of displacements in each municipality per year. Find out where and when most people have been displaced, where they arrived and how the population developed in the various municipalities.
+
+
+```{r Datatable, echo=F, warning=F, message=F}
+
+#Making strings prettier:
+
+Desplazados_2$MUNICIPIO <- str_to_lower(Desplazados_2$MUNICIPIO)
+Desplazados_2$MUNICIPIO <- str_to_title(Desplazados_2$MUNICIPIO)
+
+# Prepare Datatable
+
+Desplazados_grouped_2 <- Desplazados_2 %>% 
+  group_by(ANIO, MUNICIPIO) %>%
+  mutate(Displaced = sum(EXPULSADOS)) %>%
+  mutate(Settled = sum(RECIBIDOS)) %>% 
+  select(Municipality = MUNICIPIO,
+         Year = ANIO,
+         Displaced,
+         Settled) %>% 
+  mutate(Difference=Settled-Displaced) %>% 
+  arrange(desc(Displaced))
+
+# Delete duplicates:
+
+Displaced <- distinct(Desplazados_grouped_2)
+
+# Maybe: Displaced$Displaced <- format(Displaced$Displaced, big.mark = ",")
+
+datatable(Displaced)
+
+```
+
+
+## Displacement in Buenaventura
+
+According to the data above Buenaventura has the highest number of displaced people in one year. 2014 a total of 51,321 people were forced to leave their homes. Since 28,912 victims also settled down in Buenaventura that year, one can suspect that at least a certain percentage of the people displaced in Buenaventura's stayed within the municipality. However, at least 22,409 people left Buenaventura in 2014, which is the highest loss of population in one year. The following chart shows, how this relation between people leaving and settling down developed over time.
+
+
+```{r Buenaventura, echo=F, warning=F, message=F}
+
+#Load data
+
+Desplazados <- read_excel("/Users/Manu/Desktop/Kolumbien_Projekt/Medellin_R/data/raw_data_conflicto/Reporte_Desplazados_Anio.xlsx") %>% 
+  select(TIPO=`TIPO DE VICTIMA`,
+         ANIO,
+         DANE=`CODIGO DANE`,
+         DEPARTAMENTO, MUNICIPIO,
+         EXPULSADOS=`PERSONAS EXPULSADOS`,
+         RECIBIDOS=`PERSONAS RECIBIDOS`) %>% 
+  mutate(DIFFERENCE=RECIBIDOS-EXPULSADOS) %>% 
+  group_by(ANIO, MUNICIPIO) %>% 
+  filter(MUNICIPIO=="MEDELLIN" | MUNICIPIO=="BUENAVENTURA")
+
+Desplazados_Buen <- Desplazados %>% 
+  filter(MUNICIPIO=="BUENAVENTURA") %>% 
+  group_by(ANIO) %>% 
+  mutate(Displaced=sum(EXPULSADOS)) %>% 
+  mutate(Settled=sum(RECIBIDOS)) %>% 
+  select(-TIPO, -DANE, -DEPARTAMENTO, -MUNICIPIO,
+         -EXPULSADOS, -RECIBIDOS, -DIFFERENCE) %>% 
+  gather(Type, Victims, 2:3)
+
+ggplot(data=Desplazados_Buen,
+       aes(x=ANIO,
+           y=Victims,
+           color=Type))+
+  geom_line()+
+  scale_x_continuous(breaks=seq(1985,2015,5), limits=c(1984,2018))+
+  theme_fivethirtyeight()+
+  labs(x="Year",
+       title="Total number of victims from 1984-2018",
+       caption="Source: https://cifras.unidadvictimas.gov.co/")
+
+```
+
+
+
+## Displacement in Medellín
+
+The following chart illustrates the same relation between people that were forcefully displaced and people arriving in Medellín because of forced displacement. Here the people settling down by far exceed those leaving the municipality. The only place that received more displaced people than Medellín is Colombia's capital Bogotá, a city three times the size of Medellín in terms of population.
+
+
+```{r Timeline Medellin, echo=F, warning=F, message=F}
+
+
+Desplazados_Med <- Desplazados %>% 
+  filter(MUNICIPIO=="MEDELLIN") %>% 
+  group_by(ANIO) %>% 
+  mutate(Displaced=sum(EXPULSADOS)) %>% 
+  mutate(Settled=sum(RECIBIDOS)) %>% 
+  select(-TIPO, -DANE, -DEPARTAMENTO, -MUNICIPIO,
+         -EXPULSADOS, -RECIBIDOS, -DIFFERENCE) %>% 
+  gather(Type, Victims, 2:3)
+
+ggplot(data=Desplazados_Med,
+       aes(x=ANIO,
+           y=Victims,
+           color=Type))+
+  geom_line()+
+  scale_x_continuous(breaks=seq(1985,2015,5), limits=c(1984,2018))+
+  theme_fivethirtyeight()+
+  labs(x="Year",
+       title="Total number of victims from 1984-2018",
+       caption="Source: https://cifras.unidadvictimas.gov.co/")
+```
+
+
+## Population Change in Buenaventura and Medellín
+
+Finally the following chart sums up how forced displacement has influenced the population of Buenaventura and Medellín over the course of the last 20 years.
+
+```{r Change, echo=F, warning=F, message=F}
+
+Desplazados_Med_BUEN <- Desplazados_2 %>% 
+  filter(MUNICIPIO=="Medellin" | MUNICIPIO=="Buenaventura")
+
+Desplazados_DIF <- Desplazados_Med_BUEN %>% 
+  group_by(MUNICIPIO, ANIO) %>% 
+  mutate(DIFFERENCE=RECIBIDOS-EXPULSADOS) %>% 
+  summarise(DIFFERENCE=sum(DIFFERENCE)) %>% 
+  arrange(desc(DIFFERENCE)) %>% 
+  select(ANIO, City=MUNICIPIO, DIFFERENCE)
+
+ggplot(data=Desplazados_DIF,
+       aes(x=ANIO,
+           y=DIFFERENCE,
+           color=City)) +
+  geom_line()+
+  geom_point()+
+  scale_x_continuous(breaks=seq(1995,2015,5))+
+  geom_hline(yintercept=0, col="black")+
+  annotate("text", x=2007.5, y=1500, label="Zero Population Change", color="black")+
+  theme_fivethirtyeight()+
+  labs(title="Total Increase or Decrease of Population",
+       caption="Source: https://cifras.unidadvictimas.gov.co/")
+
+```
+
+

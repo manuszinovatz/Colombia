@@ -1,12 +1,12 @@
 ---
-title: "Armed Conflict in Colombia"
+title: "The Armed Conflict in Colombia"
 author: "Manuela Szinovatz"
-date: "17/10/2018"
 output: html_document
 ---
 
-For the analysis we are using data from the Colombian governmental organisation Unidad Victimas, that is in charge of registering all the victims of Columbia's armed conflict. They can be downloaded here: https://cifras.unidadvictimas.gov.co/
-Up until October 2018 a total number of 8.760.290 victims have been registered.
+The following analysis is based on data from the Colombian governmental organisation Unidad Victimas, that is in charge of registering the victims of Columbia's Armed Conflict. The data can be downloaded here: https://cifras.unidadvictimas.gov.co/
+
+Up until October 2018 a total number of 8.760.290 victims have been registered. Check out the table that lists the total number of violent incidents per year and find out which municipalities have been hit the hardest and when the conflict became particularly violent. Incidents reach from homicides, threats, torture, terroristic attacks and other kinds of violence. The grand majority of incidents are forced displacements.
 
 ```{r loading, warning=F, message=F, echo=F}
 
@@ -18,7 +18,7 @@ library(readxl)
 library(stringr)
 library(DT)
 
-Siniestros <- read_excel("data/raw_data_conflicto/Reporte_Siniestros.xlsx") %>%
+Siniestros <- read_excel("/Users/Manu/Desktop/Kolumbien_Projekt/Medellin_R/data/raw_data_conflicto/Reporte_Siniestros.xlsx") %>%
   select(TIPO= `TIPO DE VICTIMA`,
          ANIO=`ANIO OCURRENCIA`,
          MUNICIPIO=`MUNICIPIO OCURRENCIA`,
@@ -37,13 +37,19 @@ Siniestros_grouped <- Siniestros %>%
          Incidents = Siniestros) %>% 
   arrange(desc(Incidents))
 
+# Maybe: Siniestros_grouped$Incidents <- format(Siniestros_grouped$Incidents, big.mark = ",")
+
+Siniestros_grouped$Municipality <- str_to_lower(Siniestros_grouped$Municipality)
+
+Siniestros_grouped$Municipality <- str_to_title(Siniestros_grouped$Municipality)
+
 datatable(Siniestros_grouped)
 
 ```
 
 ## Violent Incidents
 
-The following graphic shows the overall number of incidents in Colombia's worst affected municipalities Incidents in this case reach from homicides, threats, torture, terroristic attacks and other kinds of violence. The grand majority of the displayed incidents hoewever are forced displacements.
+The following chart shows the overall number of incidents in Colombia's most affected municipalities.
 
 ```{r visualise, echo=FALSE}
 
@@ -74,7 +80,7 @@ ggplot(Siniestros_vis,
   theme_fivethirtyeight()+
   labs(x="Siniestros in Thousands",
        title="Municipalities with most Incidents",
-       subtitle="Total Number of Violent Incidents from 1985-2018",
+       subtitle="Number of Violent Incidents from 1985-2018 in Thousands",
        caption="Source: https://cifras.unidadvictimas.gov.co/")+
   geom_text(aes(label=SINIESTROS), hjust=-.5) +
   theme(panel.border = element_blank(), 
@@ -85,9 +91,9 @@ ggplot(Siniestros_vis,
 
 ```
 
-Buenaventura has more than 40 percent more violent incidents than in the second-most affected municipality Medellín, although Medellin is 6.5 times bigger than Buenaventura in terms of population.
+Buenaventura counts more than 40 percent more violent incidents than the second-most affected municipality Medellín, although Medellín is 6.5 times bigger than Buenaventura in terms of population.
 
-The following graph shows how the violent incidents in Buenaventura and Medellín have development over the last 23 years of conflict.
+The following chart shows how the amount of violent incidents in Buenaventura and Medellín have development over the last 33 years of conflict.
 
 ```{r Timeline, echo=FALSE, warning=F, message=F}
 

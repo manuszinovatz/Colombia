@@ -1,0 +1,229 @@
+---
+title: "Social Inequality in Colombia"
+author: "Manuela Szinovatz"
+output: html_document
+---
+
+
+The following analysis is based on data from the Colombian government. Explain Sisben + Poblado heads-up
+
+The data can be downloaded here: https://www.datos.gov.co/Salud-y-Protecci-n-Social/Base-de-Datos-Sisben-2017-Municipio-de-Medell-n/cnr8-armb
+
+Check out the following table that...
+
+
+```{r, Import, echo=F, warning=F, message=F, include=FALSE}
+
+# load packages
+library(readr)
+library(tidyr)
+library(dplyr)
+library(readxl)
+library(stringr)
+library(DT)
+library(sf)
+library(tigris)
+library(leaflet)
+library(stringr)
+library(scales)
+library(ggplot2)
+library(ggthemes)
+library(forcats)
+
+#Import Data
+
+Medellin <- read_csv("/Users/Manu/Desktop/Kolumbien_Projekt/Medellin_R/data/raw_data/Base_de_Datos_Sisben_2017.csv")
+
+#Delete unneccessary columns & split in Comunas and Corregimientos
+
+Medellin_Comunas <- Medellin %>% 
+  select(COMUNA, BARRIO, NOMBARRIO, ESTRATO, VIVIENDA, TCUARTOSVI, TPERSONA,
+         PARED:ACUEDUC, TENEVIV, USOSANI:SANITAR, DUCHA,
+         PREPARAN:COCINAN,
+         MOTO, AUTO1, 
+         SEXO, ESTCIVIL, EMBARAZA, CARNET, NIVEL,
+         FECHANTO,
+         ACTIVI:PERCIBE) %>%
+  filter(NOMBARRIO!="SANTA ELENA",  NOMBARRIO!="SAN ANTONIO DE PRADO",
+         NOMBARRIO!="SAN CRISTÓBAL", NOMBARRIO!="ALTAVISTA",
+         NOMBARRIO!="SAN SEBASTIAN DE PALMITAS") %>% 
+  filter(COMUNA!="50", COMUNA!="60" & COMUNA!="70", COMUNA!="80", COMUNA!="90")
+
+Total <- nrow(Medellin_Comunas)
+
+#Calculate age from Birthday
+
+library(lubridate)
+
+Medellin_Comunas$NACI <- dmy(Medellin_Comunas$FECHANTO)
+
+today <- now()
+Medellin_Comunas$AGE_DAYS <- difftime(today, Medellin_Comunas$NACI)
+
+Medellin_Comunas$AGE <- as.numeric(Medellin_Comunas$AGE_DAYS)/365.25
+
+Medellin_Comunas$AGE <- floor(Medellin_Comunas$AGE)
+
+Medellin_Comunas <- Medellin_Comunas %>% 
+  select(-FECHANTO,-NACI, -AGE_DAYS)
+
+
+```
+
+
+
+```{r, Datatable, echo=F, warning=F, message=F}
+
+# Calculate Average Education
+
+Medellin_Average_Education_DT <- Medellin_Comunas %>% 
+  select(COMUNA, NOMBARRIO, ESTRATO, SEXO, NIVEL, INGRESOS, AGE) %>% 
+  group_by(NOMBARRIO, COMUNA) %>% 
+  summarise(Average_Education=round(mean(NIVEL)))
+
+Medellin_Average_Estrato_DT <- Medellin_Comunas %>% 
+  select(COMUNA, NOMBARRIO, ESTRATO, SEXO, NIVEL, INGRESOS, AGE) %>% 
+  group_by(NOMBARRIO, COMUNA) %>% 
+  summarise(Average_Estrato=round(mean(ESTRATO)))
+
+Medellin_Education_DT <- left_join(Medellin_Average_Estrato_DT, Medellin_Average_Education_DT)
+
+Medellin_Average_Ingresos_DT <- Medellin_Comunas %>% 
+  select(COMUNA, NOMBARRIO, ESTRATO, SEXO, NIVEL, INGRESOS, AGE) %>% 
+  group_by(NOMBARRIO, COMUNA) %>% 
+  summarise(Average_Ingresos=round(mean(INGRESOS)))
+
+Medellin_Datatable_1 <- left_join(Medellin_Education_DT, Medellin_Average_Ingresos_DT)
+
+Medellin_Datatable_1 <- Medellin_Datatable_1 %>% 
+  mutate('District'=ifelse(COMUNA=="1", "Popular",
+                ifelse(COMUNA=="2", "Santa Cruz",
+                       ifelse(COMUNA=="3", "Manrique",
+                              ifelse(COMUNA=="4", "Aranjuez",
+                                     ifelse(COMUNA=="5", "Castilla",
+                                            ifelse(COMUNA=="6", "Doce de Octubre",
+                                                   ifelse(COMUNA=="7", "Robledo",
+                                                          ifelse(COMUNA=="8", "Villa Hermosa",
+                                                                 ifelse(COMUNA=="9", "Buenos Aires",
+                                                                        ifelse(COMUNA=="10", "La Candelaria",
+                                                                               ifelse(COMUNA=="11", "Laureles",
+                                                                                      ifelse(COMUNA=="12", "La América",
+                                                                                             ifelse(COMUNA=="13", "San Javier",
+                                                                                                    ifelse(COMUNA=="14", "Poblado",
+                                                                                                           ifelse(COMUNA=="15", "Guayabal",
+                                                                                                                  ifelse(COMUNA=="16", "Belén", "")))))))))))))))))
+
+Medellin_Datatable_1$District <- as.character(Medellin_Datatable_1$District)
+
+Medellin_Datatable_1 <- Medellin_Datatable_1 %>%
+  filter(Average_Ingresos!="0") %>% 
+  select(Neighbourhood = NOMBARRIO,
+         District,
+         'District Number' = COMUNA,
+         'Average Estrato' = Average_Estrato,
+         'Average Education' = Average_Education,
+         'Average Income' = Average_Ingresos)
+
+Medellin_Datatable_1$Neighbourhood <- str_to_lower(Medellin_Datatable_1$Neighbourhood)
+
+Medellin_Datatable_1$Neighbourhood <- str_to_title(Medellin_Datatable_1$Neighbourhood)
+
+datatable(Medellin_Datatable_1)
+
+```
+
+## Visualise that information:
+
+
+
+```{r, Visualise, echo=F, warning=F, message=F}
+
+Medellin_Average_Education <- Medellin_Comunas %>% 
+  select(COMUNA, NOMBARRIO, ESTRATO, SEXO, NIVEL, INGRESOS, AGE) %>% 
+  group_by(NOMBARRIO, COMUNA) %>% 
+  summarise(Average_Education=mean(NIVEL)) 
+
+Medellin_Average_Estrato <- Medellin_Comunas %>% 
+  select(COMUNA, NOMBARRIO, ESTRATO, SEXO, NIVEL, INGRESOS, AGE) %>% 
+  group_by(NOMBARRIO, COMUNA) %>% 
+  summarise(Average_Estrato=mean(ESTRATO))
+
+Medellin_Education <- left_join(Medellin_Average_Estrato, Medellin_Average_Education)
+
+Medellin_Average_Ingresos <- Medellin_Comunas %>% 
+  select(COMUNA, NOMBARRIO, ESTRATO, SEXO, NIVEL, INGRESOS, AGE) %>% 
+  group_by(NOMBARRIO, COMUNA) %>% 
+  summarise(Average_Ingresos=mean(INGRESOS))
+
+Medellin_Datatable <- left_join(Medellin_Education, Medellin_Average_Ingresos)
+
+Medellin_Datatable <- Medellin_Datatable %>% 
+  mutate(COMUNA_NAME=ifelse(COMUNA=="1", "Popular",
+                ifelse(COMUNA=="2", "Santa Cruz",
+                       ifelse(COMUNA=="3", "Manrique",
+                              ifelse(COMUNA=="4", "Aranjuez",
+                                     ifelse(COMUNA=="5", "Castilla",
+                                            ifelse(COMUNA=="6", "Doce de Octubre",
+                                                   ifelse(COMUNA=="7", "Robledo",
+                                                          ifelse(COMUNA=="8", "Villa Hermosa",
+                                                                 ifelse(COMUNA=="9", "Buenos Aires",
+                                                                        ifelse(COMUNA=="10", "La Candelaria",
+                                                                               ifelse(COMUNA=="11", "Laureles",
+                                                                                      ifelse(COMUNA=="12", "La América",
+                                                                                             ifelse(COMUNA=="13", "San Javier",
+                                                                                                    ifelse(COMUNA=="14", "Poblado",
+                                                                                                           ifelse(COMUNA=="15", "Guayabal",
+                                                                                                                  ifelse(COMUNA=="16", "Belén", "")))))))))))))))))
+
+Medellin_Datatable$COMUNA <- as.character(Medellin_Datatable$COMUNA)
+
+Medellin_Datatable_copy <- Medellin_Datatable %>% 
+  select(-COMUNA, -COMUNA_NAME)
+
+ggplot(data=Medellin_Datatable,
+       aes(x=Average_Estrato,
+           y=Average_Education,
+           color=COMUNA))+
+  geom_point(data=Medellin_Datatable_copy, color="grey")+
+  geom_point()+
+  facet_wrap(~COMUNA_NAME)+
+  scale_x_continuous(breaks=seq(0,6,6))+
+  labs(x="Average Stratus",
+       y="Average Education Level",
+       title="Districts of Medellín",
+       subtitle="Profiles of all 16 Districts by Average Education Level and Average Stratus",
+       caption="Source: Gobierno Digital Colombia") +
+  theme_fivethirtyeight()+
+  theme(panel.grid.minor = element_blank())+
+  theme(legend.position = "none")+
+  theme(axis.title = element_text())+
+  theme(axis.text.y = element_blank())
+
+```
+
+
+```{r, Viz Income, echo=F, warning=F, message=F}
+
+ggplot(data=Medellin_Datatable,
+       aes(x=Average_Estrato,
+           y=Average_Ingresos,
+           color=COMUNA))+
+  geom_point(data=Medellin_Datatable_copy, color="grey")+
+  geom_point()+
+  facet_wrap(~COMUNA_NAME)+
+  theme(legend.position = "none")+
+  scale_x_continuous(breaks=seq(0,6,6))+
+  labs(x="Average Stratus",
+       y="Average Income",
+       title="Districts of Medellín",
+       subtitle="Profiles of all 16 Districts by Average Income and Average Stratus",
+       caption="Source: Gobierno Digital Colombia") +
+  theme_fivethirtyeight()+
+  theme(panel.grid.minor = element_blank())+
+  theme(legend.position = "none")+
+  theme(axis.title = element_text())+
+  theme(axis.text.y = element_blank())
+
+
+```
+
