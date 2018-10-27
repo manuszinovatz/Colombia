@@ -1,0 +1,273 @@
+---
+title: "Living Conditions in Medellín"
+author: "Manuela Szinovatz"
+output: html_document
+---
+
+
+The following analysis is based on data from the Colombian government and was originally collected for the social program "Sisbén" (https://www.sisben.gov.co/sisben/paginas/que-es.aspx) that helps the government to allocate subsidies to people in need.
+
+The data can be downloaded here: https://www.datos.gov.co/Salud-y-Protecci-n-Social/Base-de-Datos-Sisben-2017-Municipio-de-Medell-n/cnr8-armb
+
+The dataset consists of 1,726,698 individual records. Each record accounts for one person living in Medellín's urban area and gives information about her/his socioeconomic situation. The data is anonymous. Although the sample is very big its accuracy varies slightly. Fewer data is available in the richer neighbourhoods, where fewer people rely on help from the social Sisbén system. This gets particularly clear looking at Comuna 14, Poblado, where out of approximately 130,000 inhabitants only 5,670 records can be found in the Sisbén dataset. In poorer districts and neighbourhoods usually between 80 and 100 percent are recorded. This leads to the assumption that the already very obvious difference between the richer and the poorer districts is even bigger in reality.
+
+Based on that information the following datatable summarises the average Estrato as well as the number of people sharing a room on average and the number of rooms in average housing unit in Medellín's various neighbourhoods and the respective district (Comuna) the neighbourhood belongs to.
+
+
+```{r, Import, echo=F, warning=F, message=F, include=FALSE}
+
+# load packages
+library(readr)
+library(tidyr)
+library(dplyr)
+library(readxl)
+library(stringr)
+library(DT)
+library(sf)
+library(tigris)
+library(leaflet)
+library(stringr)
+library(scales)
+library(ggplot2)
+library(ggthemes)
+library(forcats)
+
+#Import Data
+
+Medellin <- read_csv("/Users/Manu/Desktop/Kolumbien_Projekt/Medellin_R/data/raw_data/Base_de_Datos_Sisben_2017.csv")
+
+#Delete unneccessary columns & split in Comunas and Corregimientos
+
+Medellin_Comunas <- Medellin %>% 
+  select(COMUNA, BARRIO, NOMBARRIO, ESTRATO, VIVIENDA, TCUARTOSVI, TPERSONA,
+         PARED:ACUEDUC, TENEVIV, USOSANI:SANITAR, DUCHA,
+         COCINA:COCINAN,
+         MOTO, AUTO1, 
+         SEXO, ESTCIVIL, EMBARAZA, CARNET, NIVEL,
+         FECHANTO,
+         ACTIVI:PERCIBE) %>%
+  filter(NOMBARRIO!="SANTA ELENA",  NOMBARRIO!="SAN ANTONIO DE PRADO",
+         NOMBARRIO!="SAN CRISTÓBAL", NOMBARRIO!="ALTAVISTA",
+         NOMBARRIO!="SAN SEBASTIAN DE PALMITAS") %>% 
+  filter(COMUNA!="50", COMUNA!="60" & COMUNA!="70", COMUNA!="80", COMUNA!="90")
+
+Total <- nrow(Medellin_Comunas)
+
+#Calculate age from Birthday
+
+library(lubridate)
+
+Medellin_Comunas$NACI <- dmy(Medellin_Comunas$FECHANTO)
+
+today <- now()
+Medellin_Comunas$AGE_DAYS <- difftime(today, Medellin_Comunas$NACI)
+
+Medellin_Comunas$AGE <- as.numeric(Medellin_Comunas$AGE_DAYS)/365.25
+
+Medellin_Comunas$AGE <- floor(Medellin_Comunas$AGE)
+
+Medellin_Comunas <- Medellin_Comunas %>% 
+  select(-FECHANTO,-NACI, -AGE_DAYS)
+
+rm(Medellin)
+
+```
+
+
+
+```{r, Datatable, echo=F, warning=F, message=F}
+
+# Calculate how many people are sharing a home
+
+Medellin_Sharing <- Medellin_Comunas %>% 
+  select(COMUNA, NOMBARRIO, ESTRATO, TPERSONA) %>% 
+  group_by(NOMBARRIO, COMUNA) %>% 
+  summarise(PERSONA_AV=round(mean(TPERSONA)))
+
+Medellin_Average_Estrato_DT <- Medellin_Comunas %>% 
+  select(COMUNA, NOMBARRIO, ESTRATO) %>% 
+  group_by(NOMBARRIO, COMUNA) %>% 
+  summarise(Average_Estrato=round(mean(ESTRATO)))
+
+Medellin_Sharing_DT <- left_join(Medellin_Average_Estrato_DT, Medellin_Sharing)
+
+Medellin_Size <- Medellin_Comunas %>% 
+  select(COMUNA, NOMBARRIO, TCUARTOSVI) %>% 
+  group_by(NOMBARRIO, COMUNA) %>% 
+  summarise(Rooms_AV=round(mean(TCUARTOSVI)))
+
+Medellin_Sharing_DT <- left_join(Medellin_Sharing_DT, Medellin_Size)
+
+Medellin_Sharing_DT <- Medellin_Sharing_DT %>% 
+  mutate('District'=ifelse(COMUNA=="1", "Popular",
+                ifelse(COMUNA=="2", "Santa Cruz",
+                       ifelse(COMUNA=="3", "Manrique",
+                              ifelse(COMUNA=="4", "Aranjuez",
+                                     ifelse(COMUNA=="5", "Castilla",
+                                            ifelse(COMUNA=="6", "Doce de Octubre",
+                                                   ifelse(COMUNA=="7", "Robledo",
+                                                          ifelse(COMUNA=="8", "Villa Hermosa",
+                                                                 ifelse(COMUNA=="9", "Buenos Aires",
+                                                                        ifelse(COMUNA=="10", "La Candelaria",
+                                                                               ifelse(COMUNA=="11", "Laureles",
+                                                                                      ifelse(COMUNA=="12", "La América",
+                                                                                             ifelse(COMUNA=="13", "San Javier",
+                                                                                                    ifelse(COMUNA=="14", "Poblado",
+                                                                                                           ifelse(COMUNA=="15", "Guayabal",
+                                                                                                                  ifelse(COMUNA=="16", "Belén", "")))))))))))))))))
+
+Medellin_Sharing_DT$District <- as.character(Medellin_Sharing_DT$District)
+
+Medellin_Sharing_DT <- Medellin_Sharing_DT %>%
+  filter(COMUNA=="1" | COMUNA=="2" | COMUNA=="3" | 
+           COMUNA=="4" | COMUNA=="5" | COMUNA=="6" | 
+           COMUNA=="7" | COMUNA=="8" | COMUNA=="9" | 
+           COMUNA=="10" | COMUNA=="11" | COMUNA=="12" | 
+           COMUNA=="13" | COMUNA=="15" | COMUNA=="16" | 
+           COMUNA=="14" & NOMBARRIO!="MORAVIA") %>% 
+  select(Neighbourhood = NOMBARRIO,
+         District,
+         'District Number' = COMUNA,
+         'Average Estrato' = Average_Estrato,
+         'People Sharing' = PERSONA_AV,
+         'No. of Rooms' = Rooms_AV)
+
+Medellin_Sharing_DT$Neighbourhood <- str_to_lower(Medellin_Sharing_DT$Neighbourhood)
+
+Medellin_Sharing_DT$Neighbourhood <- str_to_title(Medellin_Sharing_DT$Neighbourhood)
+
+datatable(Medellin_Sharing_DT)
+
+```
+
+
+##Living Conditions
+
+Check out the datatable and find out where people are likely not to have a kitchen or bathroom in their homes.
+
+
+```{r, Living DT, echo=F, warning=F, message=F}
+
+Bathroom <- Medellin_Comunas %>% 
+  select(NOMBARRIO, COMUNA, ESTRATO, USOSANI) %>%
+  group_by(NOMBARRIO, COMUNA) %>% 
+  filter(USOSANI!="1") %>% 
+  summarise(Bathroom=n())
+
+Kitchen <- Medellin_Comunas %>% 
+  select(NOMBARRIO, COMUNA, ESTRATO, COCINA) %>%
+  group_by(NOMBARRIO, COMUNA) %>% 
+  filter(COCINA!="1") %>% 
+  summarise(Kitchen=n())
+
+Kitchen_Bath_DT <- left_join(Bathroom, Kitchen)
+Kitchen_Bath_DT <- left_join(Kitchen_Bath_DT, Medellin_Average_Estrato_DT)
+
+Kitchen_Bath_DT <- Kitchen_Bath_DT %>% 
+  mutate('District'=ifelse(COMUNA=="1", "Popular",
+                ifelse(COMUNA=="2", "Santa Cruz",
+                       ifelse(COMUNA=="3", "Manrique",
+                              ifelse(COMUNA=="4", "Aranjuez",
+                                     ifelse(COMUNA=="5", "Castilla",
+                                            ifelse(COMUNA=="6", "Doce de Octubre",
+                                                   ifelse(COMUNA=="7", "Robledo",
+                                                          ifelse(COMUNA=="8", "Villa Hermosa",
+                                                                 ifelse(COMUNA=="9", "Buenos Aires",
+                                                                        ifelse(COMUNA=="10", "La Candelaria",
+                                                                               ifelse(COMUNA=="11", "Laureles",
+                                                                                      ifelse(COMUNA=="12", "La América",
+                                                                                             ifelse(COMUNA=="13", "San Javier",
+                                                                                                    ifelse(COMUNA=="14", "Poblado",
+                                                                                                           ifelse(COMUNA=="15", "Guayabal",
+                                                                                                                  ifelse(COMUNA=="16", "Belén", "")))))))))))))))))
+
+Kitchen_Bath_DT$District <- as.character(Kitchen_Bath_DT$District)
+
+Kitchen_Bath_DT <- Kitchen_Bath_DT %>%
+  select(Neighbourhood = NOMBARRIO,
+         District,
+         'District Number' = COMUNA,
+         'Average Estrato' = Average_Estrato,
+         'No Bathroom' = Bathroom,
+         'No Kitchen' = Kitchen)
+
+Kitchen_Bath_DT$Neighbourhood <- str_to_lower(Kitchen_Bath_DT$Neighbourhood)
+Kitchen_Bath_DT$Neighbourhood <- str_to_title(Kitchen_Bath_DT$Neighbourhood)
+
+
+datatable(Kitchen_Bath_DT)
+
+```
+
+
+# Living in Moravia
+
+In the case of Moravia that means that roughly 15 percent or at least 5,070 people have to share a bathroom with other people not living with them and almost 10 percent or at least 3,294 inhabitants have to share a kitchen. The majority of them have to share both.
+
+
+```{r, Loading Moravia, echo=F, warning=F, message=F}
+
+Moravia <- Medellin_Comunas %>%
+  filter(NOMBARRIO=="MORAVIA") %>%
+  select(ESTRATO, USOSANI, COCINA)
+
+Total_Mor <- nrow(Moravia)
+
+```
+
+
+```{r, Prepare Moravia, echo=F, warning=F, message=F}
+
+#Preparing the Datatable:
+
+Kitchen_Bath_Viz <- Moravia %>% 
+  select(ESTRATO, USOSANI, COCINA) %>%
+  filter(USOSANI=="2" | USOSANI=="0" | COCINA=="2" | COCINA=="0") %>% 
+  mutate(No=
+           ifelse(USOSANI=="0" & COCINA=="1", "Bathroom",
+                  ifelse(USOSANI=="0" & COCINA=="2", "Neither",
+                         ifelse(USOSANI=="0" & COCINA=="0", "Neither",
+                                ifelse(USOSANI=="1" & COCINA=="0", "Kitchen",
+                                       ifelse(USOSANI=="1" & COCINA=="1", "With Access",
+                                              ifelse(USOSANI=="1" & COCINA=="2", "Kitchen",
+                                                     ifelse(USOSANI=="2" & COCINA=="0", "Neither",
+                                                            ifelse(USOSANI=="2" & COCINA=="1", "Bathroom",
+                                                                   ifelse(USOSANI=="2" & COCINA=="2", "Neither", "")))))))))) %>% 
+  group_by(No) %>% 
+  mutate(Total=n()) %>% 
+  mutate(Percent=round(Total/Total_Mor*100,2))
+
+
+```
+
+
+```{r, Viz, echo=F, warning=F, message=F}
+
+#Prepare for Plotting:
+
+Kitchen_Bath_Viz_Per <- Kitchen_Bath_Viz %>% 
+  group_by(ESTRATO, No) %>% 
+  summarise(No_Access_Total=n()) %>% 
+  mutate(Percent=round(No_Access_Total/Total_Mor*100,2))
+
+#Plotting:
+
+ggplot(data=Kitchen_Bath_Viz_Per,
+       aes(x=ESTRATO, y=Percent, fill=No)) +
+  geom_bar(stat="identity")+
+  labs(x="Stratus",
+       title="Living Conditions in Moravia",
+       subtitle="Percentage of Homes in Moravia without exclusive Kitchen or Bathroom",
+       caption="Source: Gobierno Digital Colombia",
+       y="Percent")+
+  theme_fivethirtyeight()+
+  theme(panel.border = element_blank(), 
+        panel.grid.minor = element_blank())+
+  scale_fill_brewer(palette="Accent")+
+  theme(legend.position = "bottom")+
+  theme(axis.title = element_text())+
+  theme(panel.grid.major.x = element_blank())
+
+
+```
+
