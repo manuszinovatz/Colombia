@@ -1,8 +1,9 @@
 ---
-title: "Social Inequality in Medellín"
+title: "Social Stratification in Medellín"
 author: "Manuela Szinovatz"
 output: html_document
 ---
+
 
 
 The following analysis is based on data from the Colombian government and was originally collected for the social program "Sisbén" (https://www.sisben.gov.co/sisben/paginas/que-es.aspx) that helps the government to allocate subsidies to people in need.
@@ -135,100 +136,92 @@ datatable(Medellin_Datatable_1)
 ```
 
 
-# District Profiles
+# Moravia vs. Medellín
 
-Based on that information the following charts give an idea about the correlation between Estrato and education/income.
+The following chart compares the percentage of people living in each Estrato in Moravia to Medellín's average. Both in Moravia and in Medellín most people belong to Estrato Two - "Low". However, the lower Estratos are generally overrepresented in Moravia.
 
 
+```{r, Load Moravia, echo=F, warning=F, message=F}
 
-```{r, Visualise, echo=F, warning=F, message=F}
+Moravia <- Medellin_Comunas %>%
+  filter(NOMBARRIO=="MORAVIA") %>%
+  select(-COMUNA, -BARRIO, -NOMBARRIO)
 
-Medellin_Average_Education <- Medellin_Comunas %>% 
-  select(COMUNA, NOMBARRIO, ESTRATO, SEXO, NIVEL, INGRESOS, AGE) %>% 
-  group_by(NOMBARRIO, COMUNA) %>% 
-  summarise(Average_Education=mean(NIVEL)) 
+Total_Mor <- nrow(Moravia)
 
-Medellin_Average_Estrato <- Medellin_Comunas %>% 
-  select(COMUNA, NOMBARRIO, ESTRATO, SEXO, NIVEL, INGRESOS, AGE) %>% 
-  group_by(NOMBARRIO, COMUNA) %>% 
-  summarise(Average_Estrato=mean(ESTRATO))
-
-Medellin_Education <- left_join(Medellin_Average_Estrato, Medellin_Average_Education)
-
-Medellin_Average_Ingresos <- Medellin_Comunas %>% 
-  select(COMUNA, NOMBARRIO, ESTRATO, SEXO, NIVEL, INGRESOS, AGE) %>% 
-  group_by(NOMBARRIO, COMUNA) %>% 
-  summarise(Average_Ingresos=mean(INGRESOS))
-
-Medellin_Datatable <- left_join(Medellin_Education, Medellin_Average_Ingresos)
-
-Medellin_Datatable <- Medellin_Datatable %>% 
-  mutate(COMUNA_NAME=ifelse(COMUNA=="1", "Popular",
-                ifelse(COMUNA=="2", "Santa Cruz",
-                       ifelse(COMUNA=="3", "Manrique",
-                              ifelse(COMUNA=="4", "Aranjuez",
-                                     ifelse(COMUNA=="5", "Castilla",
-                                            ifelse(COMUNA=="6", "Doce de Octubre",
-                                                   ifelse(COMUNA=="7", "Robledo",
-                                                          ifelse(COMUNA=="8", "Villa Hermosa",
-                                                                 ifelse(COMUNA=="9", "Buenos Aires",
-                                                                        ifelse(COMUNA=="10", "La Candelaria",
-                                                                               ifelse(COMUNA=="11", "Laureles",
-                                                                                      ifelse(COMUNA=="12", "La América",
-                                                                                             ifelse(COMUNA=="13", "San Javier",
-                                                                                                    ifelse(COMUNA=="14", "Poblado",
-                                                                                                           ifelse(COMUNA=="15", "Guayabal",
-                                                                                                                  ifelse(COMUNA=="16", "Belén", "")))))))))))))))))
-
-Medellin_Datatable$COMUNA <- as.character(Medellin_Datatable$COMUNA)
-
-Medellin_Datatable_copy <- Medellin_Datatable %>% 
-  select(-COMUNA, -COMUNA_NAME)
-
-ggplot(data=Medellin_Datatable,
-       aes(x=Average_Estrato,
-           y=Average_Education,
-           color=COMUNA))+
-  geom_point(data=Medellin_Datatable_copy, color="grey")+
-  geom_point()+
-  facet_wrap(~COMUNA_NAME)+
-  scale_x_continuous(breaks=seq(0,6,6))+
-  labs(x="Average Stratus",
-       y="Average Education Level",
-       title="Districts of Medellín",
-       subtitle="Profiles of all 16 Districts by Average Education Level and Average Stratus",
-       caption="Source: Gobierno Digital Colombia") +
-  theme_fivethirtyeight()+
-  theme(panel.grid.minor = element_blank())+
-  theme(legend.position = "none")+
-  theme(axis.title = element_text())+
-  theme(axis.text.y = element_blank())
+Poblacion_Mor <- 37000
 
 ```
 
 
-```{r, Viz Income, echo=F, warning=F, message=F}
+```{r, Visualise Moravia/Medellin, echo=F, warning=F, message=F}
 
-ggplot(data=Medellin_Datatable,
-       aes(x=Average_Estrato,
-           y=Average_Ingresos,
-           color=COMUNA))+
-  geom_point(data=Medellin_Datatable_copy, color="grey")+
-  geom_point()+
-  facet_wrap(~COMUNA_NAME)+
-  theme(legend.position = "none")+
-  scale_x_continuous(breaks=seq(0,6,6))+
-  labs(x="Average Stratus",
-       y="Average Income",
-       title="Districts of Medellín",
-       subtitle="Profiles of all 16 Districts by Average Income and Average Stratus",
+Moravia_Estrato_grouped <- Moravia %>% 
+  group_by(ESTRATO) %>%
+  summarise(Population=n()) %>%
+  mutate(Percent=round(Population/Total_Mor*100,2))
+
+Moravia_Estrato_grouped <- Moravia_Estrato_grouped %>% 
+  rename(Population_Mor=Population,
+         Percent_Mor=Percent)
+
+Medellin_Estrato_grouped <- Medellin_Comunas %>% 
+  group_by(ESTRATO) %>%
+  summarise(Population=n()) %>%
+  mutate(Percent=round(Population/Total*100,2))
+
+Estratos_Med_Mor <- full_join(Moravia_Estrato_grouped, Medellin_Estrato_grouped)
+
+Estratos_Med_Mor_Per <- Estratos_Med_Mor %>% 
+  select(ESTRATO, 
+         Medellín=Percent,
+         Moravia=Percent_Mor) %>% 
+  gather(Place, Percentage, 2:3)
+
+ggplot(data=Estratos_Med_Mor_Per,
+       aes(x=ESTRATO, y=Percentage, fill=Place)) +
+  geom_bar(position="dodge", stat="identity")+
+  labs(x="Stratus",
+       title="Stratification System in Medellín",
+       subtitle="Percentage of Homes in Moravia compared to Medellín Average",
+       caption="Source: Gobierno Digital Colombia",
+       y="Percent") +
+  theme_fivethirtyeight()+
+  theme(panel.border = element_blank(), 
+        panel.grid.minor = element_blank())+
+  scale_x_continuous(breaks=seq(0,6,1))+
+  scale_fill_brewer(palette="Accent")+
+  theme(legend.position = "bottom")+
+  theme(axis.title = element_text())+
+  theme(panel.grid.major.x = element_blank())
+
+```
+
+
+## Looking at Moravia
+
+The following chart shows the exact percentages of people living in Estrato 0 to 4. The higher Estratos 5 and 6 don't exist in Moravia.
+
+
+```{r, Viz Moravia, echo=F, warning=F, message=F}
+
+ggplot(data=Moravia_Estrato_grouped,
+         aes(x=ESTRATO,
+             y=Percent_Mor,
+             fill=ESTRATO)) +
+  geom_bar(stat="identity")+
+  labs(x="Stratus",
+       y= "Percent",
+       title="Stratification System in Moravia",
+       subtitle="Percentage of People living in Estratos 0 to 4",
        caption="Source: Gobierno Digital Colombia") +
   theme_fivethirtyeight()+
-  theme(panel.grid.minor = element_blank())+
+  theme(panel.border = element_blank(), 
+        panel.grid.minor = element_blank())+
   theme(legend.position = "none")+
   theme(axis.title = element_text())+
-  theme(axis.text.y = element_blank())
-
+  theme(panel.grid.major.x = element_blank())+
+  geom_text(aes(label=Percent_Mor), vjust=-.25, fontface = "bold", size=4.5)
 
 ```
 
