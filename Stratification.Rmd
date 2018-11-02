@@ -136,10 +136,6 @@ datatable(Medellin_Datatable_1)
 ```
 
 
-# Moravia vs. Medellín
-
-The following chart compares the percentage of people living in each Estrato in Moravia to Medellín's average. Both in Moravia and in Medellín most people belong to Estrato Two - "Low". However, the lower Estratos are generally overrepresented in Moravia.
-
 
 ```{r, Load Moravia, echo=F, warning=F, message=F}
 
@@ -164,36 +160,6 @@ Moravia_Estrato_grouped <- Moravia %>%
 Moravia_Estrato_grouped <- Moravia_Estrato_grouped %>% 
   rename(Population_Mor=Population,
          Percent_Mor=Percent)
-
-Medellin_Estrato_grouped <- Medellin_Comunas %>% 
-  group_by(ESTRATO) %>%
-  summarise(Population=n()) %>%
-  mutate(Percent=round(Population/Total*100,2))
-
-Estratos_Med_Mor <- full_join(Moravia_Estrato_grouped, Medellin_Estrato_grouped)
-
-Estratos_Med_Mor_Per <- Estratos_Med_Mor %>% 
-  select(ESTRATO, 
-         Medellín=Percent,
-         Moravia=Percent_Mor) %>% 
-  gather(Place, Percentage, 2:3)
-
-ggplot(data=Estratos_Med_Mor_Per,
-       aes(x=ESTRATO, y=Percentage, fill=Place)) +
-  geom_bar(position="dodge", stat="identity")+
-  labs(x="Stratus",
-       title="Stratification System in Medellín",
-       subtitle="Percentage of Homes in Moravia compared to Medellín Average",
-       caption="Source: Gobierno Digital Colombia",
-       y="Percent") +
-  theme_fivethirtyeight()+
-  theme(panel.border = element_blank(), 
-        panel.grid.minor = element_blank())+
-  scale_x_continuous(breaks=seq(0,6,1))+
-  scale_fill_brewer(palette="Accent")+
-  theme(legend.position = "bottom")+
-  theme(axis.title = element_text())+
-  theme(panel.grid.major.x = element_blank())
 
 ```
 
