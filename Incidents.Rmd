@@ -93,7 +93,7 @@ ggplot(Siniestros_vis,
 
 Buenaventura counts more than 40 percent more violent incidents than the second-most affected municipality Medellín, although Medellín is 6.5 times bigger than Buenaventura in terms of population.
 
-The following chart shows how the amount of violent incidents in Buenaventura and Medellín have development over the last 33 years of conflict.
+The following chart shows how these incidents in Buenaventura and Medellín have development over the last 33 years of conflict.
 
 ```{r Timeline, echo=FALSE, warning=F, message=F}
 
