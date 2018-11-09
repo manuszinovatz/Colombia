@@ -5,7 +5,7 @@ output: html_document
 ---
 
 
-The following analysis is based on data from the Colombian governmental organisation Unidad Victimas, that is in charge of registering the victims of Columbia's Armed Conflict. The data can be downloaded here: https://cifras.unidadvictimas.gov.co/
+The following analysis is based on data from the Colombian governmental organisation Unidad Victimas, that is in charge of registering the victims of Colombia's Armed Conflict. The data can be downloaded here: https://cifras.unidadvictimas.gov.co/
 
 Check out the interactive map showing the total number of displaced people in each department of Colombian.
 
@@ -187,7 +187,7 @@ datatable(Displaced)
 
 ## Displacement in Buenaventura
 
-According to the data above Buenaventura has the highest number of displaced people in only one year. 2014 a total of 51,321 people were forced to leave their homes. Since 28,912 victims also settled down in Buenaventura that year, one can suspect that approximately half of them stayed in that municipality. On the other hand, at least 22,409 people left Buenaventura in 2014, which is the highest loss of population in one year. The following chart shows, how this relation between people leaving and settling down developed over time.
+According to the data above, Buenaventura has the highest number of displaced people in only one year. In 2014 a total of 51,321 people were forced to leave their homes. Since 28,912 victims also settled down in Buenaventura that year, one can suspect that approximately half of them stayed in that municipality. On the other hand, at least 22,409 people left Buenaventura in 2014, which is the highest loss of population in one year. The following chart shows how this relation between people leaving and settling down developed over time.
 
 
 ```{r Buenaventura, echo=F, warning=F, message=F}
@@ -231,7 +231,7 @@ ggplot(data=Desplazados_Buen,
 
 ## Displacement in Medellín
 
-The following chart illustrates the relation between people that were forcefully displaced and people arriving in Medellín because of forced displacement. Here the ones settling down by far exceed those leaving the municipality. The only place that received more displaced people than Medellín is Colombia's capital Bogotá, a city three times the size of Medellín in terms of population.
+The following chart illustrates the relation between people that were forcefully displaced and people arriving in Medellín because of forced displacement. Here, the ones settling down by far exceed those leaving the municipality. The only place that received more displaced people than Medellín is Colombia's capital Bogotá, a city three times the size of Medellín in terms of population.
 
 
 ```{r Timeline Medellin, echo=F, warning=F, message=F}
